@@ -8,11 +8,12 @@ from typing import (
 )
 from web3 import Web3
 from hummingbot.core.utils.async_utils import safe_gather
+from hummingbot.market.veridex.constants import VeridexConstants
 
 DDEX_ENDPOINT = "https://api.ddex.io/v3/markets"
 RADAR_RELAY_ENDPOINT = "https://api.radarrelay.com/v2/markets"
 BAMBOO_RELAY_ENDPOINT = "https://rest.bamboorelay.com/main/0x/markets"
-VERIDEX_ENDPOINT = "https://veridex.herokuapp.com/v2/0x/markets"
+VERIDEX_ENDPOINT = VeridexConstants.GET_MARKETS_URL
 API_CALL_TIMEOUT = 5
 
 

@@ -14,6 +14,7 @@ from typing import (
 import re
 import time
 import ujson
+import uuid
 import websockets
 from websockets.exceptions import ConnectionClosed
 
@@ -26,13 +27,14 @@ from hummingbot.core.data_type.order_book_tracker_data_source import OrderBookTr
 from hummingbot.core.data_type.order_book_tracker_entry import OrderBookTrackerEntry, VeridexOrderBookTrackerEntry
 from hummingbot.core.data_type.order_book_message import OrderBookMessage, VeridexOrderBookMessage
 from hummingbot.core.utils.exchange_rate_conversion import ExchangeRateConversion
+from hummingbot.market.veridex.constants import VeridexConstants
 
 TRADING_PAIR_FILTER = re.compile(r"(WETH)$")
 
-REST_BASE_URL = "https://veridex.herokuapp.com/v2/0x"
-TOKENS_URL = f"{REST_BASE_URL}/tokens"
-MARKETS_URL = f"{REST_BASE_URL}/markets"
-WS_URL = "wss://veridex.herokuapp.com"
+REST_BASE_URL = VeridexConstants.REST_BASE_URL
+TOKENS_URL = VeridexConstants.GET_TOKENS_URL
+MARKETS_URL = VeridexConstants.GET_MARKETS_URL
+WS_URL = VeridexConstants.WS_URL
 
 
 class VeridexAPIOrderBookDataSource(OrderBookTrackerDataSource):
@@ -208,7 +210,7 @@ class VeridexAPIOrderBookDataSource(OrderBookTrackerDataSource):
                             "type": "SUBSCRIBE",
                             "topic": "BOOK",
                             "market": trading_pair,
-                            "requestId": "humming_bot"
+                            "requestId": str(uuid.uuid4())
                         }
                         await ws.send(ujson.dumps(request))
                     async for raw_msg in self._inner_messages(ws):

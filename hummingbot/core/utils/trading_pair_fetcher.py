@@ -6,12 +6,12 @@ from typing import (
 )
 
 from hummingbot.core.utils.async_utils import safe_ensure_future
-
+from hummingbot.market.veridex.constants import VeridexConstants
 
 BINANCE_ENDPOINT = "https://api.binance.com/api/v1/exchangeInfo"
 DDEX_ENDPOINT = "https://api.ddex.io/v3/markets"
 RADAR_RELAY_ENDPOINT = "https://api.radarrelay.com/v2/markets"
-VERIDEX_ENDPOINT = "https://veridex.herokuapp.com/v2/0x/markets"
+VERIDEX_ENDPOINT = VeridexConstants.GET_MARKETS_URL
 BAMBOO_RELAY_ENDPOINT = "https://rest.bamboorelay.com/main/0x/markets"
 COINBASE_PRO_ENDPOINT = "https://api.pro.coinbase.com/products/"
 IDEX_REST_ENDPOINT = "https://api.idex.market/returnTicker"

@@ -9,6 +9,12 @@ web3_private_key_radar = "<INSERT_HERE>"
 mn_zerox_token_address = "<INSERT_HERE>"
 mn_weth_token_address = "<INSERT_HERE>"
 
+# Veridex Relay test
+web3_private_key_veridex = "<INSERT_HERE>"
+mn_vsf_token_address = "<INSERT_HERE>"
+mn_weth_token_address = "<INSERT_HERE>"
+
+
 # Bamboo Relay test
 web3_private_key_bamboo = "<INSERT_HERE>"
 test_bamboo_relay_chain_id = 3
@@ -24,4 +30,3 @@ web3_test_private_key_b = "<INSERT_HERE>"
 web3_test_private_key_c = "<INSERT_HERE>"
 test_web3_provider_list = ["<INSERT_HERE>"]
 test_erc20_token_address = "<INSERT_HERE>"
-

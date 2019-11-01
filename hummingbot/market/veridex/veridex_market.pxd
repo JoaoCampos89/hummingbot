@@ -30,6 +30,7 @@ cdef class VeridexMarket(MarketBase):
         public object _approval_tx_polling_task
         public object _order_tracker_task
         int64_t _latest_salt
+        str _exchange_address
 
     cdef c_start_tracking_limit_order(self,
                                       str order_id,
@@ -49,5 +50,6 @@ cdef class VeridexMarket(MarketBase):
                                        object amount,
                                        str tx_hash)
     cdef c_expire_order(self, str order_id)
+    cdef c_expire_order_fast(self, str order_id)
     cdef c_check_and_remove_expired_orders(self)
     cdef c_stop_tracking_order(self, str order_id)

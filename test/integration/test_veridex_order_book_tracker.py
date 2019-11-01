@@ -1,8 +1,7 @@
 #!/usr/bin/env python
 import math
-import time
-from os.path import join, realpath
 import sys
+from os.path import join, realpath
 sys.path.insert(0, realpath(join(__file__, "../../../")))
 
 from hummingbot.core.event.event_logger import EventLogger
@@ -19,6 +18,7 @@ from typing import (
     Optional,
     List
 )
+
 from hummingbot.market.veridex.veridex_order_book_tracker import VeridexOrderBookTracker
 from hummingbot.core.data_type.order_book import OrderBook
 from hummingbot.core.data_type.order_book_tracker import (
@@ -36,9 +36,7 @@ class VeridexOrderBookTrackerUnitTest(unittest.TestCase):
         OrderBookEvent.TradeEvent
     ]
     trading_pairs: List[str] = [
-        "USDC-DAI",
-        "WETH-DAI",
-        "USDC-WETH"
+        "VSF-WETH",
     ]
     @classmethod
     def setUpClass(cls):
@@ -65,8 +63,6 @@ class VeridexOrderBookTrackerUnitTest(unittest.TestCase):
             if timeout and timer > timeout:
                 raise Exception("Time out running parallel async task in tests.")
             timer += 1
-            now = time.time()
-            next_iteration = now // 1.0 + 1
             await asyncio.sleep(1.0)
         return future.result()
 
@@ -102,18 +98,13 @@ class VeridexOrderBookTrackerUnitTest(unittest.TestCase):
         # Wait 5 seconds to process some diffs.
         self.ev_loop.run_until_complete(asyncio.sleep(5.0))
         order_books: Dict[str, OrderBook] = self.order_book_tracker.order_books
-        weth_dai_book: OrderBook = order_books["WETH-DAI"]
-        usdc_dai_book: OrderBook = order_books["USDC-DAI"]
-        # print(weth_dai_book.snapshot)
+        vsf_weth_book: OrderBook = order_books["VSF-WETH"]
         # print(zrx_weth_book.snapshot)
-        self.assertGreaterEqual(weth_dai_book.get_price_for_volume(True, 10).result_price,
-                                weth_dai_book.get_price(True))
-        self.assertLessEqual(weth_dai_book.get_price_for_volume(False, 10).result_price,
-                             weth_dai_book.get_price(False))
-        self.assertGreaterEqual(usdc_dai_book.get_price_for_volume(True, 10).result_price,
-                                usdc_dai_book.get_price(True))
-        self.assertLessEqual(usdc_dai_book.get_price_for_volume(False, 10).result_price,
-                             usdc_dai_book.get_price(False))
+        self.assertGreaterEqual(vsf_weth_book.get_price_for_volume(True, 10).result_price,
+                                vsf_weth_book.get_price(True))
+        self.assertLessEqual(vsf_weth_book.get_price_for_volume(False, 10).result_price,
+                             vsf_weth_book.get_price(False))
+
 
 def main():
     logging.basicConfig(level=logging.INFO)

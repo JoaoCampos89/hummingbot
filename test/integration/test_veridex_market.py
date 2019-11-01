@@ -33,7 +33,6 @@ from hummingbot.core.event.events import (
     WalletWrappedEthEvent,
     WalletUnwrappedEthEvent,
     OrderCancelledEvent,
-    OrderExpiredEvent,
     OrderFilledEvent,
     TradeType,
     TradeFee,
@@ -88,13 +87,13 @@ class VeridexMarketUnitTest(unittest.TestCase):
         cls.clock: Clock = Clock(ClockMode.REALTIME)
         cls.wallet = Web3Wallet(private_key=conf.web3_private_key_veridex,
                                 backend_urls=conf.test_web3_provider_list,
-                                erc20_token_addresses=[conf.mn_zerox_token_address, conf.mn_weth_token_address],
-                                chain=EthereumChain.MAIN_NET)
+                                erc20_token_addresses=[conf.mn_vsf_token_address, conf.mn_weth_token_address],
+                                chain=EthereumChain.ROPSTEN)
         cls.market: VeridexMarket = VeridexMarket(
             wallet=cls.wallet,
             ethereum_rpc_url=conf.test_web3_provider_list[0],
             order_book_tracker_data_source_type=OrderBookTrackerDataSourceType.EXCHANGE_API,
-            symbols=["ZRX-WETH"]
+            symbols=["VSF-WETH"]
         )
         print("Initializing Veridex Relay market... ")
         cls.ev_loop: asyncio.BaseEventLoop = asyncio.get_event_loop()
@@ -155,10 +154,10 @@ class VeridexMarketUnitTest(unittest.TestCase):
         return self.ev_loop.run_until_complete(self.run_parallel_async(*tasks))
 
     def test_get_fee(self):
-        maker_buy_trade_fee: TradeFee = self.market.get_fee("ZRX", "WETH", OrderType.LIMIT, TradeType.BUY, Decimal(20), Decimal(0.01))
+        maker_buy_trade_fee: TradeFee = self.market.get_fee("VSF", "WETH", OrderType.LIMIT, TradeType.BUY, Decimal(20), Decimal(0.01))
         self.assertEqual(maker_buy_trade_fee.percent, 0)
         self.assertEqual(len(maker_buy_trade_fee.flat_fees), 0)
-        taker_buy_trade_fee: TradeFee = self.market.get_fee("ZRX", "WETH", OrderType.MARKET, TradeType.BUY, Decimal(20))
+        taker_buy_trade_fee: TradeFee = self.market.get_fee("VSF", "WETH", OrderType.MARKET, TradeType.BUY, Decimal(20))
         self.assertEqual(taker_buy_trade_fee.percent, 0)
         self.assertEqual(len(taker_buy_trade_fee.flat_fees), 1)
         self.assertEqual(taker_buy_trade_fee.flat_fees[0][0], "ETH")
@@ -169,7 +168,7 @@ class VeridexMarketUnitTest(unittest.TestCase):
         self.assertGreaterEqual((balances["WETH"]), s_decimal_0)
 
     def test_single_limit_order_cancel(self):
-        symbol: str = "ZRX-WETH"
+        symbol: str = "VSF-WETH"
         current_price: float = self.market.get_price(symbol, True)
         amount: Decimal = Decimal(10)
         expires = int(time.time() + 60 * 5)
@@ -177,10 +176,10 @@ class VeridexMarketUnitTest(unittest.TestCase):
         buy_order_id = self.market.buy(symbol=symbol,
                                        amount=amount,
                                        order_type=OrderType.LIMIT,
-                                       price=Decimal(current_price - 0.2 * current_price),
+                                       price=current_price - Decimal("0.2") * current_price,
                                        expiration_ts=expires)
         [buy_order_opened_event] = self.run_parallel(self.market_logger.wait_for(BuyOrderCreatedEvent))
-        self.assertEqual("ZRX-WETH", buy_order_opened_event.symbol)
+        self.assertEqual("VSF-WETH", buy_order_opened_event.symbol)
         self.assertEqual(OrderType.LIMIT, buy_order_opened_event.type)
         self.assertEqual(quantized_amount, Decimal(buy_order_opened_event.amount))
 
@@ -192,7 +191,7 @@ class VeridexMarketUnitTest(unittest.TestCase):
         self.market_logger.clear()
 
     def test_limit_buy_and_sell_and_cancel_all(self):
-        symbol: str = "ZRX-WETH"
+        symbol: str = "VSF-WETH"
         current_price: float = self.market.get_price(symbol, True)
         amount: Decimal = Decimal(10)
         expires = int(time.time() + 60 * 5)
@@ -200,12 +199,12 @@ class VeridexMarketUnitTest(unittest.TestCase):
         buy_order_id = self.market.buy(symbol=symbol,
                                        amount=amount,
                                        order_type=OrderType.LIMIT,
-                                       price=Decimal(current_price - 0.2 * current_price),
+                                       price=current_price - Decimal("0.2") * current_price,
                                        expiration_ts=expires)
         [buy_order_opened_event] = self.run_parallel(self.market_logger.wait_for(BuyOrderCreatedEvent))
         self.assertEqual(buy_order_id, buy_order_opened_event.order_id)
         self.assertEqual(quantized_amount, Decimal(buy_order_opened_event.amount))
-        self.assertEqual("ZRX-WETH", buy_order_opened_event.symbol)
+        self.assertEqual("VSF-WETH", buy_order_opened_event.symbol)
         self.assertEqual(OrderType.LIMIT, buy_order_opened_event.type)
 
         # Reset the logs
@@ -214,12 +213,12 @@ class VeridexMarketUnitTest(unittest.TestCase):
         sell_order_id = self.market.sell(symbol=symbol,
                                          amount=amount,
                                          order_type=OrderType.LIMIT,
-                                         price=Decimal(current_price + 0.2 * current_price),
+                                         price=current_price + Decimal("0.2") * current_price,
                                          expiration_ts=expires)
         [sell_order_opened_event] = self.run_parallel(self.market_logger.wait_for(SellOrderCreatedEvent))
         self.assertEqual(sell_order_id, sell_order_opened_event.order_id)
         self.assertEqual(quantized_amount, Decimal(sell_order_opened_event.amount))
-        self.assertEqual("ZRX-WETH", sell_order_opened_event.symbol)
+        self.assertEqual("VSF-WETH", sell_order_opened_event.symbol)
         self.assertEqual(OrderType.LIMIT, sell_order_opened_event.type)
 
         [cancellation_results] = self.run_parallel(self.market.cancel_all(60 * 5))
@@ -229,20 +228,20 @@ class VeridexMarketUnitTest(unittest.TestCase):
         self.market_logger.clear()
 
     def test_order_expire(self):
-        symbol: str = "ZRX-WETH"
+        symbol: str = "VSF-WETH"
         current_price: float = self.market.get_price(symbol, True)
         amount: Decimal = Decimal(10)
         expires = int(time.time() + 60 * 2)  # expires in 2 min
         self.market.buy(symbol=symbol,
                         amount=amount,
                         order_type=OrderType.LIMIT,
-                        price=Decimal(current_price - 0.2 * current_price),
+                        price=current_price - Decimal("0.2") * current_price,
                         expiration_ts=expires)
         [buy_order_opened_event] = self.run_parallel(self.market_logger.wait_for(BuyOrderCreatedEvent))
 
-        self.assertEqual("ZRX-WETH", buy_order_opened_event.symbol)
+        self.assertEqual("VSF-WETH", buy_order_opened_event.symbol)
         self.assertEqual(OrderType.LIMIT, buy_order_opened_event.type)
-        [buy_order_expired_event] = self.run_parallel(self.market_logger.wait_for(OrderExpiredEvent, 60 * 3))
+        [buy_order_expired_event] = self.run_parallel(self.market_logger.wait_for(OrderCancelledEvent, 60 * 3))
         self.assertEqual(buy_order_opened_event.order_id, buy_order_expired_event.order_id)
 
         # Reset the logs
@@ -250,8 +249,8 @@ class VeridexMarketUnitTest(unittest.TestCase):
 
     def test_market_buy(self):
         amount: Decimal = Decimal(5)
-        quantized_amount: Decimal = self.market.quantize_order_amount("ZRX-WETH", amount)
-        order_id = self.market.buy("ZRX-WETH", amount, OrderType.MARKET)
+        quantized_amount: Decimal = self.market.quantize_order_amount("VSF-WETH", amount)
+        order_id = self.market.buy("VSF-WETH", amount, OrderType.MARKET)
 
         [order_completed_event] = self.run_parallel(self.market_logger.wait_for(BuyOrderCompletedEvent))
         order_completed_event: BuyOrderCompletedEvent = order_completed_event
@@ -261,14 +260,14 @@ class VeridexMarketUnitTest(unittest.TestCase):
         self.assertTrue([evt.order_type == OrderType.MARKET for evt in order_filled_events])
         self.assertEqual(order_id, order_completed_event.order_id)
         self.assertEqual(float(quantized_amount), float(order_completed_event.base_asset_amount))
-        self.assertEqual("ZRX", order_completed_event.base_asset)
+        self.assertEqual("VSF", order_completed_event.base_asset)
         self.assertEqual("WETH", order_completed_event.quote_asset)
         self.market_logger.clear()
 
     def test_market_sell(self):
         amount: Decimal = Decimal(5)
-        quantized_amount: Decimal = self.market.quantize_order_amount("ZRX-WETH", amount)
-        order_id = self.market.sell("ZRX-WETH", amount, OrderType.MARKET)
+        quantized_amount: Decimal = self.market.quantize_order_amount("VSF-WETH", amount)
+        order_id = self.market.sell("VSF-WETH", amount, OrderType.MARKET)
 
         [order_completed_event] = self.run_parallel(self.market_logger.wait_for(SellOrderCompletedEvent))
         order_completed_event: SellOrderCompletedEvent = order_completed_event
@@ -278,7 +277,7 @@ class VeridexMarketUnitTest(unittest.TestCase):
         self.assertTrue([evt.order_type == OrderType.MARKET for evt in order_filled_events])
         self.assertEqual(order_id, order_completed_event.order_id)
         self.assertEqual(float(quantized_amount), float(order_completed_event.base_asset_amount))
-        self.assertEqual("ZRX", order_completed_event.base_asset)
+        self.assertEqual("VSF", order_completed_event.base_asset)
         self.assertEqual("WETH", order_completed_event.quote_asset)
         self.market_logger.clear()
 
@@ -305,7 +304,7 @@ class VeridexMarketUnitTest(unittest.TestCase):
     def test_orders_saving_and_restoration(self):
         config_path: str = "test_config"
         strategy_name: str = "test_strategy"
-        symbol: str = "ZRX-WETH"
+        symbol: str = "VSF-WETH"
         sql: SQLConnectionManager = SQLConnectionManager(SQLConnectionType.TRADE_FILLS, db_path=self.db_path)
         order_id: Optional[str] = None
         recorder: MarketsRecorder = MarketsRecorder(sql, [self.market], config_path, strategy_name)
@@ -314,12 +313,12 @@ class VeridexMarketUnitTest(unittest.TestCase):
         try:
             self.assertEqual(0, len(self.market.tracking_states["limit_orders"]))
 
-            # Try to put limit buy order for 0.05 ETH worth of ZRX, and watch for order creation event.
+            # Try to put limit buy order for 0.00005 ETH worth of ZRX, and watch for order creation event.
             current_bid_price: float = self.market.get_price(symbol, True)
-            bid_price: float = current_bid_price * 0.8
+            bid_price: float = current_bid_price * Decimal("0.8")
             quantize_bid_price: Decimal = self.market.quantize_order_price(symbol, Decimal(bid_price))
 
-            amount: float = 0.05 / bid_price
+            amount: float = Decimal("0.00005") / bid_price
             quantized_amount: Decimal = self.market.quantize_order_amount(symbol, Decimal(amount))
 
             expires = int(time.time() + 60 * 5)
@@ -353,7 +352,7 @@ class VeridexMarketUnitTest(unittest.TestCase):
                 wallet=self.wallet,
                 ethereum_rpc_url=conf.test_web3_provider_list[0],
                 order_book_tracker_data_source_type=OrderBookTrackerDataSourceType.EXCHANGE_API,
-                symbols=["ZRX-WETH"]
+                symbols=["VSF-WETH"]
             )
             for event_tag in self.market_events:
                 self.market.add_listener(event_tag, self.market_logger)
@@ -387,7 +386,7 @@ class VeridexMarketUnitTest(unittest.TestCase):
     def test_order_fill_record(self):
         config_path: str = "test_config"
         strategy_name: str = "test_strategy"
-        symbol: str = "ZRX-WETH"
+        symbol: str = "VSF-WETH"
         sql: SQLConnectionManager = SQLConnectionManager(SQLConnectionType.TRADE_FILLS, db_path=self.db_path)
         order_id: Optional[str] = None
         recorder: MarketsRecorder = MarketsRecorder(sql, [self.market], config_path, strategy_name)
@@ -396,7 +395,7 @@ class VeridexMarketUnitTest(unittest.TestCase):
         try:
             # Try to buy 0.05 ETH worth of ZRX from the exchange, and watch for completion event.
             current_price: Decimal = self.market.get_price(symbol, True)
-            amount: Decimal = Decimal("0.05" / current_price)
+            amount: Decimal = Decimal("0.00005") / current_price
             order_id = self.market.buy(symbol, amount)
             [buy_order_completed_event] = self.run_parallel(self.market_logger.wait_for(BuyOrderCompletedEvent))
 

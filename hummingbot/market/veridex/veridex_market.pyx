@@ -51,6 +51,7 @@ from hummingbot.market.market_base import (
     OrderType,
     NaN,
     s_decimal_NaN)
+from hummingbot.wallet.ethereum.ethereum_chain import EthereumChain
 from hummingbot.market.veridex.veridex_api_order_book_data_source import VeridexAPIOrderBookDataSource
 from hummingbot.market.veridex.veridex_in_flight_order cimport VeridexInFlightOrder
 from hummingbot.market.veridex.veridex_order_book_tracker import VeridexOrderBookTracker
@@ -58,13 +59,19 @@ from hummingbot.market.trading_rule cimport TradingRule
 from hummingbot.wallet.ethereum.web3_wallet import Web3Wallet
 from hummingbot.wallet.ethereum.zero_ex.zero_ex_custom_utils import fix_signature
 from hummingbot.wallet.ethereum.zero_ex.zero_ex_exchange import ZeroExExchange
+from hummingbot.market.veridex.constants import VeridexConstants
+
 
 rrm_logger = None
 s_decimal_0 = Decimal(0)
 
 ZERO_EX_MAINNET_ERC20_PROXY = "0x95E6F48254609A6ee006F7D493c8e5fB97094ceF"
 ZERO_EX_MAINNET_EXCHANGE_ADDRESS = "0x080bf510FCbF18b91105470639e9561022937712"
-VERIDEX_REST_ENDPOINT = "https://veridex.herokuapp.com/v2/0x"
+
+ZERO_EX_ROPSTEN_ERC20_PROXY = "0xb1408f4c245a23c31b98d2c626777d4c0d766caa"
+ZERO_EX_ROPSTEN_EXCHANGE_ADDRESS = "0xbff9493f92a3df4b0429b6d00743b3cfb4c85831"
+
+VERIDEX_REST_ENDPOINT = VeridexConstants.REST_BASE_URL
 
 
 cdef class VeridexTransactionTracker(TransactionTracker):
@@ -138,8 +145,15 @@ cdef class VeridexMarket(MarketBase):
         self._order_tracker_task = None
         self._approval_tx_polling_task = None
         self._wallet = wallet
-        self._wallet_spender_address = wallet_spender_address
-        self._exchange = ZeroExExchange(self._w3, ZERO_EX_MAINNET_EXCHANGE_ADDRESS, wallet)
+
+        if wallet.chain is EthereumChain.MAIN_NET:
+            self._exchange_address = Web3.toChecksumAddress(ZERO_EX_MAINNET_EXCHANGE_ADDRESS)
+            self._wallet_spender_address = Web3.toChecksumAddress(ZERO_EX_MAINNET_ERC20_PROXY)
+        elif wallet.chain is EthereumChain.ROPSTEN:
+            self._exchange_address = Web3.toChecksumAddress(ZERO_EX_ROPSTEN_EXCHANGE_ADDRESS)
+            self._wallet_spender_address = Web3.toChecksumAddress(ZERO_EX_ROPSTEN_ERC20_PROXY)
+
+        self._exchange = ZeroExExchange(self._w3, self._exchange_address, wallet)
         self._latest_salt = -1
 
     @property
@@ -343,13 +357,26 @@ cdef class VeridexMarket(MarketBase):
             order_updates = await self._get_order_updates(tracked_limit_orders)
             for order_update, tracked_limit_order in zip(order_updates, tracked_limit_orders):
                 if isinstance(order_update, Exception):
-                    self.logger().network(
-                        f"Error fetching status update for the order "
-                        f"{tracked_limit_order.client_order_id}: {order_update}.",
-                        app_warning_msg=f"Failed to fetch status update for the order "
-                                        f"{tracked_limit_order.client_order_id}. "
-                                        f"Check Ethereum wallet and network connection."
-                    )
+                    # 404 handling
+                    if "HTTP status is 404" in str(order_update):
+                        if not tracked_limit_order.is_cancelled:
+                            self.logger().info(f"The limit order {tracked_limit_order.client_order_id} could not be found "
+                                               f"according to order status API. Removing from tracking.")
+
+                            self.c_expire_order_fast(tracked_limit_order.client_order_id)
+                            self.c_trigger_event(
+                                self.MARKET_ORDER_CANCELLED_EVENT_TAG,
+                                OrderCancelledEvent(self._current_timestamp, tracked_limit_order.client_order_id)
+                            )
+                            tracked_limit_order.last_state = "CANCELED"
+                    else:
+                        self.logger().network(
+                            f"Error fetching status update for the order "
+                            f"{tracked_limit_order.client_order_id}: {order_update}.",
+                            app_warning_msg=f"Failed to fetch status update for the order "
+                                            f"{tracked_limit_order.client_order_id}. "
+                                            f"Check Ethereum wallet and network connection."
+                        )
                     continue
                 previous_is_done = tracked_limit_order.is_done
                 previous_is_cancelled = tracked_limit_order.is_cancelled
@@ -551,7 +578,7 @@ cdef class VeridexMarket(MarketBase):
             async with client.request(http_method,
                                       url=url,
                                       timeout=self.API_CALL_TIMEOUT,
-                                      data=data,
+                                      json=data,
                                       headers=headers) as response:
                 try:
                     if response.status == 201:
@@ -605,7 +632,7 @@ cdef class VeridexMarket(MarketBase):
     def get_order_hash_hex(self, unsigned_order: Dict[str, Any]) -> str:
         order_struct = jsdict_order_to_struct(unsigned_order)
         order_hash_hex = generate_order_hash_hex(order=order_struct,
-                                                 exchange_address=ZERO_EX_MAINNET_EXCHANGE_ADDRESS.lower())
+                                                 exchange_address=self._exchange_address.lower())
         return order_hash_hex
 
     def get_zero_ex_signature(self, order_hash_hex: str) -> str:
@@ -625,7 +652,6 @@ cdef class VeridexMarket(MarketBase):
         base_asset_increment = self.trading_rules.get(symbol).min_base_amount_increment
         base_asset_decimals = -int(math.ceil(math.log10(base_asset_increment)))
         amt_with_decimals = amount * Decimal(f"1e{base_asset_decimals}")
-
         signatures = []
         orders = []
         for order in signed_market_orders:
@@ -689,7 +715,7 @@ cdef class VeridexMarket(MarketBase):
             self.logger().network(
                 f"Unexpected error cancelling orders.",
                 exc_info=True,
-                app_warning_msg=f"Failed to cancel orders on Radar Relay. "
+                app_warning_msg=f"Failed to cancel orders on Veridex. "
                                 f"Check Ethereum wallet and network connection."
             )
         return [CancellationResult(oid, False) for oid in incomplete_order_ids]
@@ -774,9 +800,9 @@ cdef class VeridexMarket(MarketBase):
         except Exception as e:
             self.c_stop_tracking_order(order_id)
             self.logger().network(
-                f"Error submitting {trade_type_desc} order to Radar Relay for {str(q_amt)} {symbol}.",
+                f"Error submitting {trade_type_desc} order to Veridex for {str(q_amt)} {symbol}.",
                 exc_info=True,
-                app_warning_msg=f"Failed to submit {trade_type_desc} order to Radar Relay. "
+                app_warning_msg=f"Failed to submit {trade_type_desc} order to Veridex. "
                                 f"Check Ethereum wallet and network connection."
             )
             self.c_trigger_event(
@@ -955,6 +981,9 @@ cdef class VeridexMarket(MarketBase):
 
     cdef c_expire_order(self, str order_id):
         self._order_expiry_queue.append((self._current_timestamp + self.ORDER_EXPIRY_TIME, order_id))
+
+    cdef c_expire_order_fast(self, str order_id):
+        self._order_expiry_queue.append((self._current_timestamp + 10, order_id))
 
     cdef c_check_and_remove_expired_orders(self):
         cdef:
