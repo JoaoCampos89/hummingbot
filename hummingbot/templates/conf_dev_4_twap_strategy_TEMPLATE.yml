@@ -1,12 +1,14 @@
 ########################################################
-###       Simple Trade strategy config               ###
+###       Execution4 strategy config               ###
 ########################################################
 
+template_version: 1
 # The following configuations are only required for the
-# simple trade strategy
+# twap strategy
 
 # Exchange and token parameters
 market: null
+market_trading_pair_tuple: null
 
 # Type of Order (Limit/Market)
 order_type: null
@@ -22,7 +24,10 @@ order_price: null
 # it will cancel the limit order.
 cancel_order_wait_time: null
 
-# How long to wait before placing the order (in seconds)
+# How many orders to place
+num_individual_orders: null
+
+# How long to between placing incremental orders
 time_delay: null
 
 # Specify buy/sell. Set to True for Buy and False for Sell
