@@ -4,6 +4,6 @@ class VeridexConstants:
     """
     # Rest API endpoints
     REST_BASE_URL = 'https://dex-backend.verisafe.io/v2/0x'
-    WS_URL = 'wss://dex-backend.verisafe.io'
+    WS_URL = 'wss://dex-backend.verisafe.io/websocket/'
     GET_TOKENS_URL = REST_BASE_URL + '/tokens'
     GET_MARKETS_URL = REST_BASE_URL + '/markets'
